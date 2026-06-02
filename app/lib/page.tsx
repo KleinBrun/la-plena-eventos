@@ -9,7 +9,7 @@ return (
 style={{
 minHeight: "100vh",
 background:
-"linear-gradient(135deg, #ff6a00 0%, #ee0979 100%)",
+'#FF3B01',
 fontFamily: "Arial, sans-serif",
 }}
 >
@@ -109,30 +109,27 @@ LA PLENA EVENTOS </h2>
     </div>
 
     {/* BOTON */}
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "center",
-        marginTop: "50px",
-      }}
-    >
-      <button
-        style={{
-          backgroundColor: "black",
-          color: "white",
-          border: "none",
-          padding: "18px 40px",
-          borderRadius: "15px",
-          fontSize: "18px",
-          fontWeight: "bold",
-          cursor: "pointer",
-        }}
-      >
-        PAGAR CON WOMPI
-      </button>
-    </div>
-  </div>
-</main>
-
-);
-}
+<div
+  style={{
+    display: "flex",
+    justifyContent: "center",
+    marginTop: "50px",
+  }}
+>
+  <a
+    href="https://checkout.wompi.co/l/VPOS_MPHBoe"
+    target="_blank"
+    style={{
+      backgroundColor: "black",
+      color: "white",
+      textDecoration: "none",
+      padding: "18px 40px",
+      borderRadius: "15px",
+      fontSize: "18px",
+      fontWeight: "bold",
+      cursor: "pointer",
+    }}
+  >
+    PAGAR CON WOMPI
+  </a>
+</div>
