@@ -1,13 +1,12 @@
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import { createClient } from '@libsql/client';
 
-export async function openDB() {
-  const db = await open({
-    filename: './rifa.db',
-    driver: sqlite3.Database,
-  });
+export const db = createClient({
+  url: process.env.TURSO_DATABASE_URL!,
+  authToken: process.env.TURSO_AUTH_TOKEN!,
+});
 
-  await db.exec(`
+export async function initDB() {
+  await db.execute(`
     CREATE TABLE IF NOT EXISTS boletas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       numero TEXT UNIQUE,
@@ -19,6 +18,4 @@ export async function openDB() {
       fecha DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
-
-  return db;
 }

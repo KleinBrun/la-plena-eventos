@@ -1,94 +1,110 @@
 import { NextResponse } from 'next/server';
-import { openDB } from '../../lib/db';
-import { transporter } from '../../lib/lib/mail';
+import { db } from '../../lib/db';
 
 export async function POST(req: Request) {
-  const {
-    cantidad,
-    nombre,
-    telefono,
-    correo,
-    referencia,
-  } = await req.json();
+  try {
+    const {
+      cantidad,
+      nombre,
+      telefono,
+      correo,
+      referencia,
+    } = await req.json();
 
-  const db = await openDB();
 
-  const hace30Minutos = new Date(
-    Date.now() - 30 * 60 * 1000
-  ).toISOString();
+    const hace30Minutos = new Date(
+      Date.now() - 30 * 60 * 1000
+    ).toISOString();
 
-  await db.run(`
-  DELETE FROM boletas
-  WHERE estado = 'RESERVADO'
-  AND fecha < ?
-`, hace30Minutos);
+    await db.execute({
+      sql: `
+    DELETE FROM boletas
+    WHERE estado = 'RESERVADO'
+    AND fecha < ?
+  `,
+      args: [hace30Minutos],
+    });
 
-  const ocupados = await db.all(`
+    const ocupados = await db.execute(`
     SELECT numero
     FROM boletas
     WHERE estado IN ('RESERVADO','PAGADO')
   `);
 
-  const usados = ocupados.map(
-    (n: any) => Number(n.numero)
-  );
+    const usados = ocupados.rows.map(
+      (n: any) => Number(n.numero)
+    );
 
-  const disponibles = [];
+    const disponibles = [];
 
-  for (let i = 1; i <= 700; i++) {
-    if (!usados.includes(i)) {
-      disponibles.push(i);
+    for (let i = 1; i <= 700; i++) {
+      if (!usados.includes(i)) {
+        disponibles.push(i);
+      }
     }
-  }
 
-  if (disponibles.length < cantidad) {
-    return NextResponse.json(
-      {
-        error:
-          'No hay suficientes boletas disponibles',
-      },
-      { status: 400 }
-    );
-  }
+    if (disponibles.length < cantidad) {
+      return NextResponse.json(
+        {
+          error:
+            'No hay suficientes boletas disponibles',
+        },
+        { status: 400 }
+      );
+    }
 
-  const seleccionados = [];
+    const seleccionados = [];
 
-  while (
-    seleccionados.length < cantidad
-  ) {
-    const indice = Math.floor(
-      Math.random() *
-      disponibles.length
-    );
+    while (
+      seleccionados.length < cantidad
+    ) {
+      const indice = Math.floor(
+        Math.random() *
+        disponibles.length
+      );
 
-    seleccionados.push(
-      disponibles.splice(indice, 1)[0]
-    );
-  }
+      seleccionados.push(
+        disponibles.splice(indice, 1)[0]
+      );
+    }
 
-  for (const numero of seleccionados) {
-    await db.run(
-      `
-      INSERT INTO boletas (
-        numero,
-        nombre,
-        telefono,
-        correo,
-        referencia,
-        estado
-      )
-      VALUES (?, ?, ?, ?, ?, ?)
-    `,
+    for (const numero of seleccionados) {
+      await db.execute({
+        sql: `
+    INSERT INTO boletas (
       numero,
       nombre,
       telefono,
       correo,
       referencia,
-      'RESERVADO'
+      estado
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+  `,
+        args: [
+          numero,
+          nombre,
+          telefono,
+          correo,
+          referencia,
+          'RESERVADO',
+        ],
+      });
+    }
+
+    return NextResponse.json({
+      numeros: seleccionados,
+    });
+  } catch (error: any) {
+    console.error('ERROR RESERVAR:', error);
+
+    return NextResponse.json(
+      {
+        error: error.message,
+      },
+      {
+        status: 500,
+      }
     );
   }
-
-  return NextResponse.json({
-    numeros: seleccionados,
-  });
 }
