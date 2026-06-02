@@ -1,5 +1,11 @@
 import './globals.css'
 import Link from 'next/link'
+import type { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'La Plena Eventos',
+  description: 'Eventos y rifas',
+}
 
 export default function RootLayout({
   children,
@@ -7,7 +13,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html>
+    <html lang="es">
       <body>
         
         <main>{children}</main>
