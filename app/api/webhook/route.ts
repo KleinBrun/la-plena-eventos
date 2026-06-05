@@ -3,17 +3,17 @@ import { NextResponse } from 'next/server';
 import { transporter } from '../../lib/lib/mail';
 
 export async function POST(req: Request) {
-  const body = await req.json();
+  try {
+    const body = await req.json();
+    console.log('WEBHOOK BODY:', JSON.stringify(body));
 
-  if (body.event === 'transaction.updated') {
-    const transaccion = body.data.transaction;
+    if (body.event === 'transaction.updated') {
+      const transaccion = body.data.transaction;
 
-    console.log(
-      'REFERENCIA WOMPI:',
-      transaccion.reference
-    );
+      console.log('REFERENCIA WOMPI:', transaccion.reference);
+      console.log('ESTADO TRANSACCIÓN:', transaccion.status);
 
-    if (transaccion.status === 'APPROVED') {
+      if (transaccion.status === 'APPROVED') {
 
       const resultado = await db.execute({
         sql: `
@@ -28,14 +28,13 @@ export async function POST(req: Request) {
       const boletas = resultado.rows;
 
       if (boletas.length === 0) {
-        return NextResponse.json({
-          ok: true,
-        });
+        console.log('NO SE ENCONTRARON BOLETAS RESERVADAS PARA ESTA REFERENCIA');
+        return NextResponse.json({ ok: true });
       }
 
-      const numeros = boletas.map(
-        (b: any) => b.numero
-      );
+      console.log('BOLETAS ENCONTRADAS:', boletas.length);
+
+      const numeros = boletas.map((b: any) => b.numero);
 
       const comprador: any = boletas[0];
 
@@ -60,10 +59,17 @@ export async function POST(req: Request) {
           <p>Mucha suerte 🍀</p>
         `,
       });
+
+      console.log('EMAIL ENVIADO A:', comprador.correo);
     }
   }
 
-  return NextResponse.json({
-    ok: true,
-  });
+  return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    console.error('ERROR WEBHOOK:', error);
+    return NextResponse.json(
+      { error: error.message ?? 'Error inesperado' },
+      { status: 500 }
+    );
+  }
 }
