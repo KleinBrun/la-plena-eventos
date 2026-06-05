@@ -11,12 +11,17 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ok: true,
     });
-  } catch (error: any) {
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Error inesperado';
+
     console.error(error);
 
     return NextResponse.json(
       {
-        error: error.message,
+        error: message,
       },
       {
         status: 500,

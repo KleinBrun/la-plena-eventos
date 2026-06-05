@@ -1,6 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import {
+  useState,
+  useEffect,
+  useRef,
+  useEffectEvent,
+  useMemo,
+} from 'react';
 import SHA256 from 'crypto-js/sha256';
 import { Poppins } from 'next/font/google';
 
@@ -16,41 +22,50 @@ const poppins = Poppins({
   ],
 });
 
-export default function Home() {
-  const valorBoleta = 1000;
+const BASE_TICKET_CANTIDADES = [2, 3, 5, 7];
 
-  const tickets = [
-    {
-      id: 1,
-      nombre: '🎟️ TICKET 2 BOLETAS',
-      cantidad: 2,
-      valor: 2 * valorBoleta,
-    },
-    {
-      id: 2,
-      nombre: '🎟️ TICKET 3 BOLETAS',
-      cantidad: 3,
-      valor: 3 * valorBoleta,
-    },
-    {
-      id: 3,
-      nombre: '🎟️ TICKET 5 BOLETAS',
-      cantidad: 5,
-      valor: 5 * valorBoleta,
-    },
-    {
-      id: 4,
-      nombre: '🎟️ TICKET 7 BOLETAS',
-      cantidad: 7,
-      valor: 7 * valorBoleta,
-    },
-  ];
+export default function Home() {
+  const TOTAL_BOLETAS = Number(
+    process.env
+      .NEXT_PUBLIC_TOTAL_BOLETAS ?? 700
+  );
+  const valorBoleta = Number(
+    process.env
+      .NEXT_PUBLIC_VALOR_BOLETA ?? 5000
+  );
+  const premioRifa =
+    process.env
+      .NEXT_PUBLIC_PREMIO_RIFA ??
+    'SILLA DE VAQUERÍA + ALFOMBRA';
+  const raffleId = Number(
+    process.env.NEXT_PUBLIC_RAFFLE_ID ?? 1
+  );
+
+  type Ticket = {
+    id: number;
+    nombre: string;
+    cantidad: number;
+    valor: number;
+  };
+
+  type Progreso = {
+    total: number;
+    vendidas: number;
+    porcentaje: number;
+    restantes: number;
+  };
 
   const [ticketSeleccionado, setTicketSeleccionado] =
-    useState<any>(null);
+    useState<Ticket | null>(null);
   const ticketsRef = useRef<HTMLDivElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const [progreso, setProgreso] =
+    useState<Progreso>({
+      total: TOTAL_BOLETAS,
+      vendidas: 0,
+      porcentaje: 0,
+      restantes: TOTAL_BOLETAS,
+    });
   const [nombre, setNombre] =
     useState('');
 
@@ -62,6 +77,39 @@ export default function Home() {
   const [mostrarModal, setMostrarModal] =
     useState(false);
 
+  const tickets = useMemo<Ticket[]>(() => {
+    const restantes = Math.max(
+      progreso.restantes,
+      0
+    );
+
+    if (restantes === 0) {
+      return [];
+    }
+
+    const cantidadesAjustadas =
+      BASE_TICKET_CANTIDADES.map((cantidad) =>
+        Math.min(cantidad, restantes)
+      );
+
+    const cantidadesUnicas =
+      Array.from(new Set(cantidadesAjustadas));
+
+    if (
+      restantes === 1 &&
+      !cantidadesUnicas.includes(1)
+    ) {
+      cantidadesUnicas.unshift(1);
+    }
+
+    return cantidadesUnicas.map((cantidad) => ({
+      id: cantidad,
+      nombre: `🎟️ TICKET ${cantidad} BOLETA${cantidad === 1 ? '' : 'S'}`,
+      cantidad,
+      valor: cantidad * valorBoleta,
+    }));
+  }, [progreso.restantes, valorBoleta]);
+
   const inputStyle = {
     width: '100%',
     padding: '14px',
@@ -70,7 +118,52 @@ export default function Home() {
     borderRadius: '12px',
     fontSize: '16px',
     outline: 'none',
+    boxSizing: 'border-box' as const,
   };
+
+  const obtenerProgreso = async () => {
+    try {
+      const res = await fetch('/api/progreso', {
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        return null;
+      }
+
+      return (await res.json()) as Progreso;
+    } catch {
+      return null;
+    }
+  };
+
+  const cargarProgreso = useEffectEvent(async () => {
+    const data = await obtenerProgreso();
+
+    if (!data) {
+      return;
+    }
+
+    setProgreso(data);
+  });
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      void cargarProgreso();
+    }, 0);
+
+    const intervalId = setInterval(
+      () => {
+        void cargarProgreso();
+      },
+      15000
+    );
+
+    return () => {
+      clearTimeout(timeoutId);
+      clearInterval(intervalId);
+    };
+  }, []);
 
   // useEffect(() => {
   //   const handleClickOutside = (
@@ -119,7 +212,7 @@ export default function Home() {
       return;
     }
 
-    const referencia = `RIFA-${Date.now()}`;
+    const referencia = `RIFA-${raffleId}-${Date.now()}`;
 
     const response = await fetch(
       '/api/reservar',
@@ -145,13 +238,23 @@ export default function Home() {
     console.log('RESPUESTA API:');
     console.log(texto);
 
-    let data;
+    let data: { error?: string } | null = null;
 
     try {
-      data = JSON.parse(texto);
-    } catch (error) {
+      data = JSON.parse(texto) as {
+        error?: string;
+      };
+    } catch {
       console.error('La API no devolvió JSON');
       console.error(texto);
+      return;
+    }
+
+    if (!response.ok) {
+      alert(
+        data?.error ??
+          'No se pudo reservar la compra.'
+      );
       return;
     }
 
@@ -217,12 +320,24 @@ export default function Home() {
 
         <p
           style={{
-            color: 'white',
-            fontSize: '28px',
-            fontWeight: '600',
+            display: 'inline-block',
+            color: '#8a4b00',
+            fontSize: '30px',
+            fontWeight: '800',
+            letterSpacing: '0.8px',
+            margin: '14px auto 0 auto',
+            padding: '14px 24px',
+            borderRadius: '999px',
+            background:
+              'radial-gradient(circle at top, #fffdf8 0%, #ffffff 50%, #fff6db 100%)',
+            border: '1px solid rgba(255,255,255,0.95)',
+            boxShadow:
+              '0 0 0 3px rgba(255, 240, 196, 0.25), 0 10px 28px rgba(255, 214, 122, 0.35), 0 0 22px rgba(255, 244, 208, 0.8)',
+            textTransform: 'uppercase',
+            textShadow: '0 1px 0 rgba(255,255,255,0.8)',
           }}
         >
-          SILLA DE VAQUERÍA + ALFOMBRA
+          {premioRifa}
         </p>
 
         <p
@@ -233,9 +348,83 @@ export default function Home() {
         >
           Valor por boleta:
           {' '}
-          $5.000
+          ${valorBoleta.toLocaleString('es-CO')}
         </p>
       </div>
+
+      <section
+        style={{
+          maxWidth: '900px',
+          margin: '0 auto 40px auto',
+          padding: '0',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'center',
+            color: '#e9fbff',
+            fontWeight: 700,
+            marginBottom: '12px',
+            gap: '10px',
+            flexWrap: 'wrap',
+            fontSize: '20px',
+          }}
+        >
+          <span
+            style={{
+              color: '#ffffff',
+              letterSpacing: '0.5px',
+            }}
+          >
+            {progreso.porcentaje}%
+          </span>
+        </div>
+
+        <div
+          style={{
+            width: '100%',
+            height: '18px',
+            borderRadius: '999px',
+            background: '#ffffff',
+            overflow: 'hidden',
+            border: '1px solid rgba(255, 255, 255, 0.55)',
+          }}
+        >
+          <div
+            style={{
+              width: `${progreso.porcentaje}%`,
+              height: '100%',
+              background:
+                'linear-gradient(110deg, #29b6f6 0%, #1e88e5 35%, #42a5f5 60%, #1565c0 100%)',
+              transition: 'width 0.65s ease-out',
+              boxShadow: '0 0 8px rgba(41, 182, 246, 0.28)',
+              position: 'relative',
+              overflow: 'hidden',
+              animation:
+                progreso.porcentaje < 100
+                  ? 'barraVendida 3.2s ease-in-out infinite'
+                  : 'none',
+            }}
+          >
+            {progreso.porcentaje < 100 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: '-40%',
+                  width: '40%',
+                  height: '100%',
+                  background:
+                    'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.32) 50%, rgba(255,255,255,0) 100%)',
+                  animation:
+                    'reflejoCarga 1.8s ease-in-out infinite',
+                }}
+              />
+            )}
+          </div>
+        </div>
+      </section>
 
       {/* TICKETS */}
       <div ref={ticketsRef}
@@ -319,6 +508,23 @@ export default function Home() {
             </div>
           );
         })}
+
+        {tickets.length === 0 && (
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              textAlign: 'center',
+              color: '#fff',
+              background: 'rgba(0, 0, 0, 0.25)',
+              border: '1px solid rgba(255,255,255,0.25)',
+              borderRadius: '18px',
+              padding: '22px',
+              fontWeight: 700,
+            }}
+          >
+            No hay boletas disponibles en este momento.
+          </div>
+        )}
       </div>
 
       {mostrarModal && (
@@ -347,7 +553,7 @@ export default function Home() {
               width: '100%',
               maxWidth: '500px',
               borderRadius: '25px',
-              padding: '35px',
+              padding: '30px',
             }}
           >
             <h2
